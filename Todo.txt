@@ -1,0 +1,153 @@
+Here is a comprehensive, production-ready feature specification breakdown for **Lyraa Live v1.0**, structured specifically to take you from initial architecture to a fully deployable web application.
+
+---
+
+# **Lyraa Live v1.0 — Technical & Feature Specification**
+
+---
+
+## 1. Authentication & Authorization
+
+### User Roles & Roles Matrix
+
+* **Guest / Visitor:** Read-only access to published lyrics, annotations, and lyric-card creator.
+* **Contributor / Fan:** Can submit lyrics, draft/vote on annotations, create/like lyric cards, and comment.
+* **Verified Artist / Manager:** Can claim track profiles, officialize/lock lyrics, post official line explanations ("Artist Notes"), and manage track metadata.
+* **Cultural Editor / Moderator:** Can review, edit, approve, or reject community lyric submissions and annotations.
+* **Super Admin:** System configuration, role assignments, audit log viewing, user management, and content deletion.
+
+### Authentication Mechanisms
+
+* **OAuth 2.0 / Social Logins:** Google, Apple ID, and X (Twitter) authentication.
+* **Email & Password / Magic Links:**
+* Password hashing via `argon2id` or `bcrypt` (work factor $\ge 12$).
+* Passwordless email "Magic Link" option for low-friction signup.
+
+
+* **Session Management:**
+* JWT access tokens (short-lived, ~15 mins, stored in memory) + HttpOnly/SameSite/Secure refresh cookies (7–30 days).
+* Session revocation endpoint (deletes active session tokens in Redis / database).
+
+
+
+### Permissions Architecture
+
+* **Role-Based Access Control (RBAC):** Middleware checking granular permission scopes (e.g., `lyrics:submit`, `lyrics:verify`, `annotations:approve`).
+* **Resource Ownership Guards:** Users can only edit/delete their own comments, annotations, or pending lyric drafts.
+
+---
+
+## 2. Core Track & Lyric Engine
+
+```
+[ Track Search / Select ] ──► [ Multi-Lang Engine ] ──► [ Interactive Reader ]
+                                 (rw / en / fr)              │
+                                                             ├──► Deep Kinyarwanda Sheet
+                                                             └──► Line-level Comments
+
+```
+
+### Track Metadata Management
+
+* Fields: Title, Primary Artist, Featuring Artists, Producer(s), Album/EP, Release Year, Cover Art URL, YouTube/Spotify/Apple Music streaming links.
+* Genre Tagging: Gakondo, Kinyatrap, Gospel, R&B, Afrobeats, Hip-Hop, Drill, Oldies.
+
+### Lyric Display & Multi-Language Switching
+
+* **Dual-View Support:**
+* *Mobile:* Single column with persistent language switcher tabs (`RW` | `EN` | `FR`).
+* *Desktop:* Split-screen or inline side-by-side comparative mode.
+
+
+* **Verse/Structure Indicators:** Clean visual tags for `[Intro]`, `[Verse 1]`, `[Chorus]`, `[Bridge]`, `[Outro]`.
+* **Orthography Verification Tag:** Highlighting whether lyrics are *Verified by Artist*, *Editor Approved*, or *Community Draft*.
+
+---
+
+## 3. "Deep Kinyarwanda" Cultural & Poetic Annotation Engine
+
+### Inline Metaphor Highlighting
+
+* Key cultural phrases, idioms (*Imigani*), historical allusions (*Ibisigo*), and street slang are visually underlined or highlighted in the lyric body text.
+
+### Interactive Slide-Over / Bottom Sheet
+
+* Tapping/clicking an annotated phrase opens a slide-over panel displaying:
+* **Original Phrase:** (e.g., *"Urugori"*)
+* **Literal Translation:** Word-for-word meaning in English/French.
+* **Cultural & Poetic Context:** Historical background, metaphorical intent, or modern slang usage.
+* **Attribution:** Name of the editor or artist who provided the note.
+
+
+
+---
+
+## 4. "Lyrics-to-Clip" Micro-Content Studio
+
+### Canvas Editor & Card Generation
+
+* **Selection:** Users highlight 1 to 4 consecutive lines of lyrics.
+* **Customization Controls:**
+* Background options: Solid color, preset gradients, album art background (blurred), or local cultural artwork textures.
+* Typography styles: Modern Sans, Elegant Serif, or Bold Display font options.
+* Watermark & Attribution: Displays track title, artist name, and a clean Umurage Live brand mark.
+
+
+* **Export Engine:** Client-side rendering (using `html-to-image` or HTML5 Canvas) outputting high-resolution PNG format (1:1 Aspect Ratio for Posts or 9:16 for Stories/Status).
+
+### Social Feed & Community Sharing
+
+* **Card Gallery:** Public feed showcasing trending lyric cards created by the community.
+* **Social Actions:** Like, bookmark, and share directly to WhatsApp, Instagram Stories, X (Twitter), or download to device.
+
+---
+
+## 5. Community Crowdsourcing & Moderation
+
+### Submission & Annotation Pipeline
+
+* **Lyric Submission Flow:** Structured form for users to post raw text, select track metadata, and add initial language translations.
+* **Review Queue:** Pending queue for Cultural Editors to verify spelling, grammar, and Kinyarwanda orthography standard adherence.
+* **Upvoting & Suggested Edits:** Community members can propose line-level corrections or upvote the best annotation explanations.
+
+### Moderation & Content Safety
+
+* Automated text-filtering for offensive language or hate speech.
+* Reporting system for inaccurate lyrics, inappropriate comments, or spam.
+
+---
+
+## 6. Developer Platform & Integration API
+
+### Public REST / GraphQL API
+
+* **Read-only Endpoints:**
+* `GET /v1/tracks` — Search and filter tracks.
+* `GET /v1/tracks/{id}/lyrics` — Fetch lyrics with language code parameter (`lang=rw|en|fr`).
+* `GET /v1/tracks/{id}/annotations` — Fetch cultural annotations and timestamps/line indexes.
+
+
+
+### Rate-Limiting & Security
+
+* API Key management for external developers and music platforms.
+* Redis-backed rate limiting (e.g., 100 requests per minute for public endpoints).
+
+---
+
+## 7. Operational Readiness, Monitoring & Infrastructure
+
+### Recommended Tech Stack Summary
+
+* **Frontend:** Next.js (React), Tailwind CSS, Framer Motion, `html-to-image`.
+* **Backend:** Node.js (Express/FastAPI) or Next.js Serverless Routes.
+* **Database & Cache:** PostgreSQL (Primary DB) + Redis (Session storage & rate limiting).
+* **Storage / CDN:** AWS S3 or Cloudflare R2 for album art & generated card images.
+* **Search Engine:** PostgreSQL Full-Text Search (or Meilisearch / Algolia for fuzzy matching Kinyarwanda titles).
+
+### Monitoring & Operations
+
+* **Error Tracking:** Sentry integration for frontend & backend exception logging.
+* **Analytics:** Privacy-friendly event tracking (e.g., Umami or Plausible) to measure most searched tracks, shared lyrics, and active annotations.
+
+---
