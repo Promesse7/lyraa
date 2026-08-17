@@ -1,0 +1,251 @@
+// Lyraa Live v1.0 — data model.
+// Dev runs on SQLite (zero-setup); the schema is Postgres-portable:
+// switch provider to "postgresql" + set DATABASE_URL, then `prisma migrate`.
+// SQLite has no native enums, so role/status fields are validated strings —
+// the canonical unions live in src/lib/constants.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("FAN") // FAN | ARTIST | EDITOR | ADMIN
+  points       Int      @default(0)
+  avatarTone   String   @default("sage") // sage | accent | neutral
+  createdAt    DateTime @default(now())
+
+  artist            Artist?
+  submissions       Submission[]     @relation("submitter")
+  reviewed          Submission[]     @relation("reviewer")
+  cards             LyricCard[]
+  cardLikes         CardLike[]
+  cardComments      CardComment[]
+  lineLikes         LineLike[]
+  lineComments      LineComment[]
+  annotationUpvotes AnnotationUpvote[]
+  follows           Follow[]
+  lyricRequests     LyricRequest[]
+  apiKeys           ApiKey[]
+}
+
+model Artist {
+  id             String  @id @default(cuid())
+  slug           String  @unique
+  name           String
+  verified       Boolean @default(false)
+  bio            String?
+  genres         String // display string, e.g. "Gakondo / R&B"
+  location       String?
+  avatarGradient String
+  // a pinned fan interpretation shown on the profile (design screen 08)
+  pinnedInterpretation String?
+  pinnedInterpretationBy String?
+  followersCount Int     @default(0)
+  userId         String? @unique
+  user           User?   @relation(fields: [userId], references: [id])
+
+  tracks    Track[]
+  followers Follow[]
+}
+
+model Track {
+  id            String  @id @default(cuid())
+  slug          String  @unique
+  title         String
+  artistId      String
+  artist        Artist  @relation(fields: [artistId], references: [id])
+  featuring     String?
+  producers     String?
+  album         String?
+  releaseYear   Int?
+  genre         String // Gakondo | Kinyatrap | Gospel | R&B | Afrobeats | Hip-Hop | Drill | Oldies
+  coverGradient String
+  verification  String  @default("COMMUNITY") // ARTIST_VERIFIED | EDITOR_APPROVED | COMMUNITY
+  youtubeUrl    String?
+  spotifyUrl    String?
+  appleMusicUrl String?
+  trendingScore Int     @default(0)
+  createdAt     DateTime @default(now())
+
+  sections    LyricSection[]
+  lines       LyricLine[]
+  annotations Annotation[]
+  cards       LyricCard[]
+}
+
+model LyricSection {
+  id      String @id @default(cuid())
+  trackId String
+  track   Track  @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  label   String // "Intro" | "Verse 1" | "Chorus" | "Bridge" | "Outro" …
+  order   Int
+
+  lines LyricLine[]
+
+  @@unique([trackId, order])
+}
+
+model LyricLine {
+  id         String  @id @default(cuid())
+  trackId    String
+  track      Track   @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  sectionId  String
+  section    LyricSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  order      Int
+  textRw     String
+  textEn     String?
+  textFr     String?
+  likesCount Int     @default(0)
+
+  likes       LineLike[]
+  comments    LineComment[]
+  annotations Annotation[]
+
+  @@unique([trackId, order])
+}
+
+model Annotation {
+  id              String  @id @default(cuid())
+  trackId         String
+  track           Track   @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  lineId          String?
+  line            LyricLine? @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  phrase          String // e.g. "urugori"
+  kind            String  @default("CULTURAL_TERM") // CULTURAL_TERM | PROVERB | SLANG | HISTORY
+  literal         String
+  poetic          String
+  culturalContext String?
+  artistNote      String?
+  artistNoteBy    String?
+  annotatedBy     String // display handle, e.g. "umuhanzi_w"
+  status          String  @default("APPROVED") // PENDING | APPROVED | REJECTED
+  upvotes         Int     @default(0)
+  createdAt       DateTime @default(now())
+
+  upvoters AnnotationUpvote[]
+}
+
+model AnnotationUpvote {
+  userId       String
+  annotationId String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  annotation   Annotation @relation(fields: [annotationId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@id([userId, annotationId])
+}
+
+model LineLike {
+  userId    String
+  lineId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  line      LyricLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@id([userId, lineId])
+}
+
+model LineComment {
+  id        String    @id @default(cuid())
+  lineId    String
+  line      LyricLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime  @default(now())
+}
+
+model LyricCard {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trackId       String
+  track         Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  linesText     String // selected lines joined with \n
+  translation   String?
+  theme         String   @default("terracotta") // terracotta | sage | ink | cream
+  aspect        String   @default("post") // post (4:5) | story (9:16)
+  caption       String?
+  isArtistNote  Boolean  @default(false)
+  likesCount    Int      @default(0)
+  commentsCount Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  likes    CardLike[]
+  comments CardComment[]
+}
+
+model CardLike {
+  userId    String
+  cardId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  card      LyricCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@id([userId, cardId])
+}
+
+model CardComment {
+  id        String    @id @default(cuid())
+  cardId    String
+  card      LyricCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime  @default(now())
+}
+
+model Follow {
+  userId    String
+  artistId  String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artist    Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, artistId])
+}
+
+model Submission {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation("submitter", fields: [userId], references: [id], onDelete: Cascade)
+  title      String
+  artistName String
+  genre      String
+  language   String   @default("rw")
+  body       String
+  status     String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  reviewNote String?
+  reviewerId String?
+  reviewer   User?    @relation("reviewer", fields: [reviewerId], references: [id])
+  createdAt  DateTime @default(now())
+  reviewedAt DateTime?
+}
+
+model LyricRequest {
+  id            String   @id @default(cuid())
+  query         String
+  requestedById String?
+  requestedBy   User?    @relation(fields: [requestedById], references: [id])
+  createdAt     DateTime @default(now())
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  label     String
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  rpm       Int      @default(100)
+  createdAt DateTime @default(now())
+}
